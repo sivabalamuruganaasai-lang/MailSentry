@@ -1,0 +1,23 @@
+{
+  "model_name": "LinearSVC",
+  "experiment_id": "E11",
+  "feature_families": [
+    "word",
+    "structural",
+    "url"
+  ],
+  "word_max_features": 10000,
+  "word_mode": "light",
+  "apply_scaling": true,
+  "scaler_type": "MaxAbsScaler",
+  "random_state": 42,
+  "frozen_threshold": 0.4013,
+  "decision_operator": "score >= threshold",
+  "positive_class": "SPAM (1)",
+  "negative_class": "HAM (0)",
+  "train_sample_count": 4233,
+  "val_sample_count": 907,
+  "test_sample_count": 906,
+  "manifest_file": "data/interim/group_split_manifest.csv",
+  "config_sha256": "61cb986bfc2e49b8b2af450c5a728653b53a63267d074b0ede3e137bff2202b2"
+}

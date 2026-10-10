@@ -1,0 +1,27 @@
+{
+  "deployment_id": "E11_deploy_v1",
+  "model_name": "LinearSVC",
+  "experiment_id": "E11",
+  "artifact_file": "models/deployment_e11.joblib",
+  "artifact_sha256": "7752ac87665a2d98c033a77e39688cb854d486ae0224ce458c6020627644ea06",
+  "artifact_size_bytes": 332430,
+  "artifact_size_mb": 0.32,
+  "frozen_threshold": 0.4013,
+  "feature_count": 10036,
+  "feature_families": [
+    "word",
+    "structural",
+    "url"
+  ],
+  "word_max_features": 10000,
+  "word_mode": "light",
+  "apply_scaling": true,
+  "scaler_type": "MaxAbsScaler",
+  "python_version": "3.11.7 (tags/v3.11.7:fa7a6f2, Dec  4 2023, 19:24:49) [MSC v.1937 64 bit (AMD64)]",
+  "environment": {
+    "sklearn_version": "1.9.1",
+    "joblib_version": "1.6.0",
+    "numpy_version": "2.2.6",
+    "pandas_version": "3.0.5"
+  }
+}

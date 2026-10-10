@@ -1,0 +1,76 @@
+# ==========================================
+# Byte-compiled / optimized / Python caches
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ==========================================
+# Virtual Environments & Packages
+# ==========================================
+.env
+.env.*
+!.env.example
+env/
+venv/
+.venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# ==========================================
+# Credentials, Keys, and Secrets
+# ==========================================
+*.pem
+*.key
+*.cert
+*.crt
+secrets.json
+
+# ==========================================
+# Testing & Code Coverage
+# ==========================================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# ==========================================
+# IDE, Editor, and OS Artifacts
+# ==========================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ==========================================
+# Large Raw Email Datasets & Manifests (CRITICAL)
+# ==========================================
+data/raw/
+data/raw/**
+data/interim/
+data/interim/**
+data/processed/
+data/processed/**
+*.tar.bz2
+*.tar.gz
+
+# ==========================================
+# Temporary, Scratch, and Benchmark Runs
+# ==========================================
+scratch/
+tmp/
+temp/
+*.tmp
+
+# ==========================================
+# Streamlit Runtime Cache
+# ==========================================
+.streamlit/cache/
