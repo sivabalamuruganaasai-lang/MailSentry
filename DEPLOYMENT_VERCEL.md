@@ -26,15 +26,16 @@ MailSentry uses a decoupled, serverless single-page application (SPA) architectu
 | Dimension | Streamlit (`src/ui/app.py`) | Vercel Web App (`public/` + `api/`) |
 | :--- | :--- | :--- |
 | **Hosting Model** | Persistent stateful Python process | Decoupled static SPA + stateless Serverless Lambdas |
-| **Dependencies** | Full (`streamlit`, `matplotlib`, `seaborn`) | Lean (`api/requirements.txt`: scikit-learn, joblib, numpy, pandas, scipy) |
+| **Dependencies** | Full (`requirements-dev.txt`: `streamlit`, `matplotlib`, `seaborn`, `pytest`) | Lean (`requirements.txt`: `scikit-learn`, `joblib`, `numpy`, `pandas`, `scipy`) |
 | **Bundle Size** | ~383 MB uncompressed | ~247 MB uncompressed (under Vercel 250 MB limit) |
 | **Concurrency** | Shared memory server | Ephemeral auto-scaling instances |
 | **Privacy / Storage** | Local host only | Cloud serverless; zero disk writes, in-memory processing only |
 
 ---
 
-## 2. Pre-Deployment Configuration (`vercel.json`)
+## 2. Pre-Deployment Configuration (`vercel.json` & `.vercelignore`)
 
+### Deployment Configuration (`vercel.json`)
 The deployment configuration is maintained in `vercel.json`:
 - **Static Output Isolation (`outputDirectory: "public"`)**: Restricts static web serving exclusively to `public/`, preventing unauthorized web access to internal repository assets (`models/`, `src/`, `data/`).
 - **Serverless File Inclusion (`includeFiles: "models/**"`)**: Guarantees that `models/deployment_e11.joblib` and `models/deployment_manifest.json` are packaged inside the serverless lambda.
@@ -48,30 +49,33 @@ The deployment configuration is maintained in `vercel.json`:
   - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
 - **Routing**: API endpoints routed to `api/*.py`, static assets served directly from `public/`.
 
+### Deployment Filtering (`.vercelignore`)
+A `.vercelignore` file at the repository root prevents Vercel from mistaking local development tools for deployment services:
+- **Excludes `src/ui/app.py` & `.streamlit/`**: Ensures Vercel does not detect Streamlit as a separate service (preventing the multi-service `vercel.json` prompt).
+- **Excludes `requirements-dev.txt`, `tests/`, `reports/`, and `data/`**: Prevents development assets from bloating the repository analysis and deployment artifact.
+
 ---
 
 ## 3. GitHub Import & Vercel Project Setup
 
-When you are ready to deploy to Vercel (following separate approval):
-
 ### Step 1: Push Repository to GitHub
-Ensure the repository is pushed to a private or public GitHub repository:
+Ensure all deployment configuration files are committed and pushed to `main`:
 ```bash
-git add vercel.json api/ public/ tests/test_vercel_api.py DEPLOYMENT_VERCEL.md
-git commit -m "feat: vercel decoupled web app and serverless api"
+git add requirements.txt requirements-dev.txt .vercelignore DEPLOYMENT_VERCEL.md
+git commit -m "fix(vercel): configure single-project serverless deployment and .vercelignore"
 git push origin main
 ```
 
 ### Step 2: Import into Vercel Dashboard
 1. Log in to [Vercel](https://vercel.com).
 2. Click **Add New...** > **Project**.
-3. Select your GitHub repository (`email-spam-classifier`).
+3. Select your GitHub repository (`MailSentry`).
 4. In **Project Settings**:
-   - **Framework Preset**: Select `Other` (do not select Next.js, Nuxt, or Create React App).
-   - **Root Directory**: `./` (project root).
-   - **Build Command**: Leave empty (no frontend build step required; vanilla JS/CSS).
-   - **Output Directory**: `public` (or leave empty to inherit `"outputDirectory": "public"` from `vercel.json`).
-   - **Install Command**: Leave default (Vercel automatically installs `api/requirements.txt`).
+   - **Framework Preset**: Select **`Other`** (crucial: disables auto-detected "Services" mode).
+   - **Root Directory**: `./` (leave default repository root; do not change to `api/` or `public/`).
+   - **Build Command**: Leave empty / toggle Override OFF (vanilla HTML/CSS/JS requires no build step).
+   - **Output Directory**: Toggle Override ON and enter **`public`** (or leave empty to inherit `"outputDirectory": "public"` from `vercel.json`).
+   - **Install Command**: Leave default (Vercel automatically installs the minimal runtime from root `requirements.txt`).
 5. **Environment Variables**:
    - None required. MailSentry runs completely self-contained with offline heuristics and zero external API keys.
 6. Click **Deploy**.

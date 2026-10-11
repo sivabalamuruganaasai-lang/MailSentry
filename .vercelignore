@@ -1,0 +1,18 @@
+# Development-only UI and configurations
+src/ui/app.py
+.streamlit/
+requirements-dev.txt
+
+# Testing, local environments, and temporary directories
+tests/
+scratch/
+tmp/
+temp/
+.pytest_cache/
+.coverage
+htmlcov/
+.playwright-mcp/
+
+# Datasets, benchmarks, and markdown reports
+data/
+reports/
