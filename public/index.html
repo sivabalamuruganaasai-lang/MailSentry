@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MailSentry Threat Intelligence // E11 Neural Core</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Tactical Brand Header -->
+    <header class="soc-header">
+      <div>
+        <div class="brand-title">
+          🛡️ MailSentry <span class="brand-sub">THREAT INTELLIGENCE // E11 NEURAL CORE</span>
+        </div>
+        <div class="brand-desc">
+          High-precision binary spam classification (&tau; = 0.4013), 3-tier operational triage, and offline heuristic URL analysis.
+        </div>
+      </div>
+      <div class="header-telemetry">
+        <span class="pill pill-offline"><span class="pulse-dot"></span><span id="api-status-text">Checking API...</span></span>
+        <span class="pill pill-dim">Model: E11 LinearSVC</span>
+        <span class="pill pill-dim">Air-Gapped URLs</span>
+      </div>
+    </header>
+
+    <!-- Public Cloud Processing Notice -->
+    <div class="privacy-banner">
+      <span>⚠️</span>
+      <div>
+        <strong>Public Cloud Processing Notice:</strong> This public deployment processes submitted emails via an ephemeral cloud runtime. Avoid submitting confidential corporate data, credentials, or proprietary information unless authorized.
+      </div>
+    </div>
+
+    <!-- Main Ingestion & Verdict Grid -->
+    <main class="main-grid">
+      <!-- Left Column: Ingestion Gateway -->
+      <section class="panel">
+        <div class="panel-header">
+          <span>📥 EMAIL INGESTION WORKSPACE</span>
+          <span>INPUT GATEWAY</span>
+        </div>
+
+        <!-- Preset Selection -->
+        <div class="form-group">
+          <label class="label" for="preset-select">Benchmark Email Presets</label>
+          <select id="preset-select" class="select-input">
+            <option value="">Select a Preset Demo Email...</option>
+            <option value="Legitimate Team Sync (HAM)">Legitimate Team Sync (HAM)</option>
+            <option value="Promotional HTML Newsletter (HTML FP Case)">Promotional HTML Newsletter (HTML FP Case)</option>
+            <option value="Phishing Scam with IP Host Link (SPAM)">Phishing Scam with IP Host Link (SPAM)</option>
+          </select>
+        </div>
+
+        <!-- Mode Tabs -->
+        <div class="mode-tabs">
+          <button id="tab-paste-btn" class="mode-tab active" type="button">Paste Email Content</button>
+          <button id="tab-upload-btn" class="mode-tab" type="button">Upload File (.eml, .txt)</button>
+        </div>
+
+        <!-- Mode A: Paste Text -->
+        <div id="paste-container" class="form-group">
+          <textarea id="email-textarea" class="textarea-input" placeholder="Paste full RFC 822 raw email payload or raw message body here...&#10;&#10;From: sender@domain.com&#10;To: recipient@domain.com&#10;Subject: Meeting notes...&#10;&#10;Message body..."></textarea>
+          <div style="display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--text-dim); font-family: var(--font-mono); margin-top: 0.25rem;">
+            <span id="text-chars-count">0 characters &bull; 0 lines</span>
+            <span>Max limit: 2.0 MiB</span>
+          </div>
+        </div>
+
+        <!-- Mode B: File Upload -->
+        <div id="upload-container" class="form-group" style="display: none;">
+          <div id="dropzone" class="dropzone">
+            <input type="file" id="file-input" accept=".eml,.txt,message/rfc822,text/plain" style="display: none;">
+            <div class="dropzone-title">📁 Drag & drop email file (.eml, .txt)</div>
+            <div class="dropzone-sub">or click to browse your local filesystem (Max 2.0 MiB)</div>
+          </div>
+
+          <div id="file-info-box" class="file-box" style="display: none;">
+            <div>
+              <div id="loaded-filename" style="font-weight: 700; font-size: 0.8rem; color: #FFFFFF;">filename.eml</div>
+              <div id="loaded-filesize" style="font-size: 0.7rem; color: var(--text-dim); font-family: var(--font-mono);">0 KB</div>
+            </div>
+            <button id="remove-file-btn" class="pill pill-dim" style="cursor: pointer;" type="button">Remove File</button>
+          </div>
+        </div>
+
+        <!-- Validation / Error Alert Box -->
+        <div id="input-error-box" class="advisory-box" style="display: none; background: rgba(244, 63, 94, 0.15); border-color: rgba(244, 63, 94, 0.4); color: #FDA4AF;"></div>
+
+        <!-- Trigger Buttons -->
+        <div class="btn-group">
+          <button id="run-btn" class="btn-primary" type="button">
+            <span id="run-btn-spinner" style="display: none;">⏳</span>
+            <span id="run-btn-text">⚡ Run Threat Analysis</span>
+          </button>
+          <button id="reset-btn" class="btn-secondary" type="button">↺ Reset</button>
+        </div>
+
+        <!-- Architectural Note -->
+        <div style="font-size: 0.72rem; color: var(--text-dim); background: #020C18; padding: 0.6rem; border-radius: 2px; border: 1px solid var(--border-dim); line-height: 1.45;">
+          🔒 <strong>Offline Heuristic Analysis:</strong> Model evaluation executes with zero live DNS calls or external API queries. Input is verified in-memory and never written to disk.
+        </div>
+      </section>
+
+      <!-- Right Column: Tactical Threat Evaluation -->
+      <section class="panel" id="result-panel">
+        <div class="panel-header">
+          <span>🎯 THREAT EVALUATION & INTELLIGENCE</span>
+          <span id="eval-header-status">STANDBY</span>
+        </div>
+
+        <!-- Standby State Container -->
+        <div id="standby-container" style="display: flex; flex-direction: column; gap: 1rem;">
+          <div class="standby-card">
+            <div class="standby-title">Awaiting Email Payload</div>
+            <div class="standby-desc">Paste an email payload or upload a .eml/.txt file on the left, then click <strong>Run Threat Analysis</strong>.</div>
+          </div>
+
+          <div style="background: #020C18; border: 1px solid var(--border-dim); padding: 0.85rem; border-radius: 3px;">
+            <div style="font-size: 0.72rem; font-weight: 700; color: var(--cyan-accent); font-family: var(--font-mono); margin-bottom: 0.35rem;">
+              MODEL SPECIFICATION (E11 LINEARSVC)
+            </div>
+            <div style="font-size: 0.73rem; color: var(--text-muted); line-height: 1.5;">
+              Dual-layer classification engine: Binary threshold &tau; = <code>0.4013</code> paired with 3-tier operational triage bounds (Auto HAM &lt; <code>-0.3520</code>, Review Queue <code>[-0.3520, 0.6010]</code>, Auto SPAM &gt; <code>0.6010</code>).
+            </div>
+          </div>
+
+          <div style="background: #020C18; border: 1px solid var(--border-dim); padding: 0.85rem; border-radius: 3px;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.72rem; font-weight: 700; color: var(--cyan-accent); font-family: var(--font-mono); margin-bottom: 0.35rem;">
+              <span>EXTRACTED URL INTELLIGENCE</span>
+              <span class="pill pill-dim">0 URLs Detected</span>
+            </div>
+            <div style="font-size: 0.73rem; color: var(--text-dim);">
+              Awaiting payload ingestion to extract and syntactically inspect embedded links.
+            </div>
+          </div>
+        </div>
+
+        <!-- Evaluated Result Container -->
+        <div id="evaluated-container" style="display: none; flex-direction: column; gap: 1rem;">
+          <!-- 1. Primary Verdict Hero Banner -->
+          <div id="verdict-banner" class="verdict-hero">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+              <div>
+                <div id="verdict-title" class="verdict-title">CLASSIFIED HAM</div>
+                <div id="verdict-sub" class="verdict-sub">Binary Classification: NEGATIVE &bull; Score S(x) &lt; 0.4013</div>
+              </div>
+              <div style="text-align: right;">
+                <div style="font-size: 0.68rem; font-weight: 700; color: var(--text-muted); font-family: var(--font-mono); text-transform: uppercase;">SIGNED MARGIN S(x) - &tau;</div>
+                <div id="signed-margin-val" style="font-size: 1.35rem; font-weight: 800; font-family: var(--font-mono); color: var(--green-safe);">-1.5169</div>
+                <div id="abs-distance-val" style="font-size: 0.68rem; font-family: var(--font-mono); color: var(--text-dim);">|S(x) - &tau;| = 1.5169</div>
+              </div>
+            </div>
+            <div id="advisory-callout" class="advisory-box" style="display: none;"></div>
+          </div>
+
+          <!-- 2. Decision Metrics Grid -->
+          <div class="metrics-grid">
+            <div class="metric-tile">
+              <div class="metric-label">Raw Decision Score S(x)</div>
+              <div id="tile-score-val" class="metric-value">-1.1156</div>
+              <div id="tile-score-sub" class="metric-sub">Signed margin: -1.5169 vs &tau;</div>
+            </div>
+            <div class="metric-tile">
+              <div class="metric-label">Binary Threshold &tau;</div>
+              <div class="metric-value">0.4013</div>
+              <div id="tile-thresh-sub" class="metric-sub">Boundary: S(x) &lt; +0.4013 &rarr; HAM</div>
+            </div>
+            <div class="metric-tile">
+              <div class="metric-label">Absolute Distance |S(x) - &tau;|</div>
+              <div id="tile-dist-val" class="metric-value" style="color: var(--cyan-accent);">1.5169</div>
+              <div id="tile-dist-sub" class="metric-sub">SVM zero-plane: |S(x)| = 1.1156</div>
+            </div>
+          </div>
+
+          <!-- 3. Operational Routing Dispatch -->
+          <div style="background: var(--bg-card); border: 1px solid var(--border-dim); border-radius: 4px; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.78rem; font-weight: 700; color: #FFFFFF; font-family: var(--font-mono);">OPERATIONAL ROUTING DISPATCH</span>
+              <span id="route-tier-pill" class="pill pill-safe">AUTO HAM</span>
+            </div>
+
+            <div class="route-grid">
+              <div id="route-tile-ham" class="route-tile">
+                <span id="route-badge-ham" class="pill pill-safe">● ACTIVE</span>
+                <div class="route-name" style="color: #34D399;">AUTO HAM</div>
+                <div class="route-bounds">S(x) &lt; -0.3520</div>
+                <div style="font-size: 0.65rem; color: var(--text-dim); margin-top: 0.2rem;">Direct Delivery</div>
+              </div>
+              <div id="route-tile-rev" class="route-tile">
+                <span id="route-badge-rev" class="pill pill-dim">INACTIVE</span>
+                <div class="route-name" style="color: #FBBF24;">REVIEW QUEUE</div>
+                <div class="route-bounds">-0.3520 &le; S(x) &le; 0.6010</div>
+                <div style="font-size: 0.65rem; color: var(--text-dim); margin-top: 0.2rem;">Moderator Triage</div>
+              </div>
+              <div id="route-tile-spm" class="route-tile">
+                <span id="route-badge-spm" class="pill pill-dim">INACTIVE</span>
+                <div class="route-name" style="color: #FB7185;">AUTO SPAM</div>
+                <div class="route-bounds">S(x) &gt; 0.6010</div>
+                <div style="font-size: 0.65rem; color: var(--text-dim); margin-top: 0.2rem;">Auto Quarantine</div>
+              </div>
+            </div>
+
+            <!-- Corridor Track -->
+            <div class="corridor-wrap">
+              <div class="corridor-header">
+                <span>Policy Uncertainty Corridor [-0.3520 to +0.6010]</span>
+                <span id="corridor-active-score" style="color: var(--cyan-accent);">Active S(x) = -1.1156</span>
+              </div>
+              <div class="corridor-track">
+                <div class="corridor-seg-ham" style="width: 38.3%;">AUTO HAM</div>
+                <div class="corridor-seg-rev" style="width: 31.7%;">
+                  REVIEW QUEUE
+                  <div style="position: absolute; right: 28%; top: 0; bottom: 0; border-right: 1px dashed rgba(0, 229, 255, 0.6);" title="&tau; = 0.4013"></div>
+                </div>
+                <div class="corridor-seg-spm" style="width: 30.0%;">AUTO SPAM</div>
+                <div id="corridor-pin" class="corridor-pin" style="left: 20%;"></div>
+              </div>
+            </div>
+
+            <div id="route-explanation-text" style="font-size: 0.73rem; color: var(--text-muted); background: #020C18; padding: 0.65rem; border-radius: 2px; border: 1px solid var(--border-dim); line-height: 1.45;"></div>
+          </div>
+
+          <!-- 4. Extracted URLs Card -->
+          <div style="background: var(--bg-card); border: 1px solid var(--border-dim); border-radius: 4px; padding: 1rem; display: flex; flex-direction: column; gap: 0.6rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span id="urls-card-title" style="font-size: 0.78rem; font-weight: 700; color: #FFFFFF; font-family: var(--font-mono);">
+                Extracted URLs &amp; Offline Heuristics
+              </span>
+              <span id="url-risk-pill" class="pill pill-safe">LOW RISK</span>
+            </div>
+
+            <div style="font-size: 0.72rem; color: var(--text-dim); background: #010F1F; padding: 0.45rem 0.65rem; border-radius: 2px; border: 1px solid var(--border-dim);">
+              🔒 <strong>Offline heuristics only:</strong> Syntactic pattern analysis without live DNS lookups, reputation API calls, or verifying destination safety. Total detected count reflects all extracted URL occurrences across email MIME parts.
+            </div>
+
+            <div id="url-items-list"></div>
+          </div>
+
+          <!-- 5. Drill-Down Tabs -->
+          <div style="background: var(--bg-card); border: 1px solid var(--border-dim); border-radius: 4px; padding: 1rem;">
+            <div class="tabs-nav">
+              <button id="tab-feat-btn" class="tab-btn active" type="button">Feature Attribution</button>
+              <button id="tab-head-btn" class="tab-btn" type="button">Header Telemetry</button>
+              <button id="tab-mode-btn" class="tab-btn" type="button">Model Specification</button>
+            </div>
+
+            <!-- Tab 1: Features -->
+            <div id="tab-feat-content" class="tab-content">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                <div>
+                  <div style="font-size: 0.72rem; font-weight: 700; color: var(--red-threat); margin-bottom: 0.35rem; font-family: var(--font-mono);">TOP SPAM EVIDENCE (&rarr; POSITIVE)</div>
+                  <table class="soc-table">
+                    <thead><tr><th>Feature</th><th>Weight</th><th>Contrib</th></tr></thead>
+                    <tbody id="top-spam-tbody"></tbody>
+                  </table>
+                </div>
+                <div>
+                  <div style="font-size: 0.72rem; font-weight: 700; color: var(--green-safe); margin-bottom: 0.35rem; font-family: var(--font-mono);">TOP HAM EVIDENCE (&rarr; NEGATIVE)</div>
+                  <table class="soc-table">
+                    <thead><tr><th>Feature</th><th>Weight</th><th>Contrib</th></tr></thead>
+                    <tbody id="top-ham-tbody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab 2: Headers -->
+            <div id="tab-head-content" class="tab-content" style="display: none;">
+              <table class="soc-table">
+                <tbody id="headers-tbody"></tbody>
+              </table>
+            </div>
+
+            <!-- Tab 3: Model Spec -->
+            <div id="tab-mode-content" class="tab-content" style="display: none;">
+              <div style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.6; font-family: var(--font-mono);">
+                <div><strong>Classifier:</strong> Linear Support Vector Classifier (LinearSVC)</div>
+                <div><strong>Feature Dimensions:</strong> 10,036 total features (10,000 Word TF-IDF + 26 Structural + 10 URL)</div>
+                <div><strong>Normalization:</strong> MaxAbsScaler</div>
+                <div><strong>Decision Threshold:</strong> &tau; = 0.4013</div>
+                <div><strong>Triage Bounds:</strong> Auto HAM (&lt; -0.3520), Review Queue ([-0.3520, 0.6010]), Auto SPAM (&gt; 0.6010)</div>
+                <div><strong>Artifact SHA-256:</strong> <code style="color: var(--cyan-accent);" id="artifact-sha-code">7752ac87665a2d98c033a77e39688cb854d486ae0224ce458c6020627644ea06</code> (Verified)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+# Minimal runtime dependencies for Vercel Serverless API
+# Strictly excludes Streamlit, Matplotlib, Seaborn, and Pytest to stay under the 250 MB bundle ceiling
+scikit-learn==1.9.1
+joblib==1.6.0
+numpy==2.2.6
+pandas==3.0.5
+scipy==1.17.1

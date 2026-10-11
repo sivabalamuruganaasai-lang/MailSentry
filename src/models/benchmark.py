@@ -17,10 +17,6 @@ from typing import Dict, List, Tuple, Any, Optional
 import numpy as np
 import pandas as pd
 import joblib
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 from sklearn.metrics import (
     accuracy_score,
@@ -350,6 +346,11 @@ def plot_confusion_matrices(
     y_val: np.ndarray
 ):
     """Generate confusion matrix figures for serious candidates."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     for exp_id in top_experiments:
         if exp_id not in predictions_cache:
