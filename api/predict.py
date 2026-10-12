@@ -163,7 +163,7 @@ def extract_payload_bytes(content_type: str, body_bytes: bytes) -> bytes:
                         continue
                     # Strip trailing CRLF
                     return file_data.rstrip(b"\r\n-")
-                elif b'name="email_text"' in part or b'name="text"' in part:
+                elif b'name="email_file"' in part or b'name="email_text"' in part or b'name="text"' in part:
                     if b"\r\n\r\n" in part:
                         field_data = part.split(b"\r\n\r\n", 1)[1]
                     elif b"\n\n" in part:

@@ -791,3 +791,263 @@ def test_client_xss_injection_payload_sanitization():
     assert res["success"] is True
     # The JSON response contains the parsed subject as raw string data; it must not be rendered into HTML unescaped
     assert res["telemetry"]["subject"] == "<script>alert('XSS')</script>"
+
+
+def test_predict_endpoint_from_and_to_only_rejected():
+    """Verify From and To headers without body return HTTP 422 INSUFFICIENT_CONTENT."""
+    payload = "From: alice@example.com\nTo: bob@example.com"
+    payload_bytes = json.dumps({"email_text": payload}).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "Content-Length": str(len(payload_bytes)),
+        "X-Forwarded-For": "10.0.0.30"
+    }
+
+    req = MockServerlessRequest(method="POST", path="/api/predict", headers=headers, body=payload_bytes, client_ip="10.0.0.30")
+    handler = PredictHandler.__new__(PredictHandler)
+    handler.headers = req.headers
+    handler.rfile = req.rfile
+    handler.wfile = req.wfile
+    handler.client_address = req.client_address
+    handler.send_response = req.send_response
+    handler.send_header = req.send_header
+    handler.end_headers = req.end_headers
+
+    handler.do_POST()
+
+    assert req.response_code == 422
+    res = req.get_response_json()
+    assert res["code"] == "INSUFFICIENT_CONTENT"
+    assert "decision" not in res
+
+
+def test_predict_endpoint_from_and_to_empty_subject_with_generic_prose_rejected():
+    """Verify From and To with empty subject and generic prose body returns HTTP 422 INVALID_EMAIL_INPUT."""
+    payload = (
+        "From: alice@example.com\n"
+        "To: bob@example.com\n"
+        "Subject: \n\n"
+        "Photosynthesis is a biological process utilized by plants to convert solar radiant "
+        "energy into chemical bonds stored inside glucose and carbohydrate molecules."
+    )
+    payload_bytes = json.dumps({"email_text": payload}).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "Content-Length": str(len(payload_bytes)),
+        "X-Forwarded-For": "10.0.0.31"
+    }
+
+    req = MockServerlessRequest(method="POST", path="/api/predict", headers=headers, body=payload_bytes, client_ip="10.0.0.31")
+    handler = PredictHandler.__new__(PredictHandler)
+    handler.headers = req.headers
+    handler.rfile = req.rfile
+    handler.wfile = req.wfile
+    handler.client_address = req.client_address
+    handler.send_response = req.send_response
+    handler.send_header = req.send_header
+    handler.end_headers = req.end_headers
+
+    handler.do_POST()
+
+    assert req.response_code == 422
+    res = req.get_response_json()
+    assert res["code"] == "INVALID_EMAIL_INPUT"
+    assert "decision" not in res
+
+
+def test_predict_endpoint_from_and_to_empty_subject_with_valid_body_accepted():
+    """Verify From and To with empty subject but meaningful body returns HTTP 200 with model decision."""
+    payload = (
+        "From: alice@example.com\n"
+        "To: bob@example.com\n"
+        "Subject: \n\n"
+        "Are you free for lunch tomorrow at noon? Let me know if that works."
+    )
+    payload_bytes = json.dumps({"email_text": payload}).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "Content-Length": str(len(payload_bytes)),
+        "X-Forwarded-For": "10.0.0.32"
+    }
+
+    req = MockServerlessRequest(method="POST", path="/api/predict", headers=headers, body=payload_bytes, client_ip="10.0.0.32")
+    handler = PredictHandler.__new__(PredictHandler)
+    handler.headers = req.headers
+    handler.rfile = req.rfile
+    handler.wfile = req.wfile
+    handler.client_address = req.client_address
+    handler.send_response = req.send_response
+    handler.send_header = req.send_header
+    handler.end_headers = req.end_headers
+
+    handler.do_POST()
+
+    assert req.response_code == 200
+    res = req.get_response_json()
+    assert res["success"] is True
+    assert "decision" in res
+    assert res["decision"]["label"] in ["HAM", "SPAM"]
+
+
+def test_predict_endpoint_missing_subject_valid_email_accepted():
+    """Verify email missing Subject header entirely but with legitimate message body returns HTTP 200."""
+    payload = (
+        "From: manager@workplace.com\n"
+        "To: team@workplace.com\n\n"
+        "Please remember to submit your weekly timesheets before 5 PM today. Thank you!"
+    )
+    payload_bytes = json.dumps({"email_text": payload}).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "Content-Length": str(len(payload_bytes)),
+        "X-Forwarded-For": "10.0.0.33"
+    }
+
+    req = MockServerlessRequest(method="POST", path="/api/predict", headers=headers, body=payload_bytes, client_ip="10.0.0.33")
+    handler = PredictHandler.__new__(PredictHandler)
+    handler.headers = req.headers
+    handler.rfile = req.rfile
+    handler.wfile = req.wfile
+    handler.client_address = req.client_address
+    handler.send_response = req.send_response
+    handler.send_header = req.send_header
+    handler.end_headers = req.end_headers
+
+    handler.do_POST()
+
+    assert req.response_code == 200
+    res = req.get_response_json()
+    assert res["success"] is True
+    assert "decision" in res
+
+
+def test_predict_endpoint_body_only_valid_email_accepted():
+    """Verify body-only email without headers returns HTTP 200 with model decision."""
+    payload = "Can we reschedule our project sync to 3pm tomorrow? Let me know if that works."
+    payload_bytes = json.dumps({"email_text": payload}).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "Content-Length": str(len(payload_bytes)),
+        "X-Forwarded-For": "10.0.0.34"
+    }
+
+    req = MockServerlessRequest(method="POST", path="/api/predict", headers=headers, body=payload_bytes, client_ip="10.0.0.34")
+    handler = PredictHandler.__new__(PredictHandler)
+    handler.headers = req.headers
+    handler.rfile = req.rfile
+    handler.wfile = req.wfile
+    handler.client_address = req.client_address
+    handler.send_response = req.send_response
+    handler.send_header = req.send_header
+    handler.end_headers = req.end_headers
+
+    handler.do_POST()
+
+    assert req.response_code == 200
+    res = req.get_response_json()
+    assert res["success"] is True
+    assert "decision" in res
+
+
+def test_predict_endpoint_malformed_headers_rejected():
+    """Verify headers with empty required values return HTTP 422."""
+    payload = "From: \nTo: \nSubject: Status\n\nPlease check the project status."
+    payload_bytes = json.dumps({"email_text": payload}).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "Content-Length": str(len(payload_bytes)),
+        "X-Forwarded-For": "10.0.0.35"
+    }
+
+    req = MockServerlessRequest(method="POST", path="/api/predict", headers=headers, body=payload_bytes, client_ip="10.0.0.35")
+    handler = PredictHandler.__new__(PredictHandler)
+    handler.headers = req.headers
+    handler.rfile = req.rfile
+    handler.wfile = req.wfile
+    handler.client_address = req.client_address
+    handler.send_response = req.send_response
+    handler.send_header = req.send_header
+    handler.end_headers = req.end_headers
+
+    handler.do_POST()
+
+    assert req.response_code == 422
+    res = req.get_response_json()
+    assert res["code"] == "INVALID_EMAIL_INPUT"
+
+
+def test_predict_endpoint_embedded_headers_in_prose_rejected():
+    """Verify prose embedding 'From:' and 'To:' within a paragraph is rejected with HTTP 422."""
+    payload = (
+        "In this biology experiment, the solution moved across the permeable barrier.\n"
+        "From: Chamber 1\n"
+        "To: Chamber 2\n"
+        "The reaction was recorded under constant laboratory temperatures."
+    )
+    payload_bytes = json.dumps({"email_text": payload}).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "Content-Length": str(len(payload_bytes)),
+        "X-Forwarded-For": "10.0.0.36"
+    }
+
+    req = MockServerlessRequest(method="POST", path="/api/predict", headers=headers, body=payload_bytes, client_ip="10.0.0.36")
+    handler = PredictHandler.__new__(PredictHandler)
+    handler.headers = req.headers
+    handler.rfile = req.rfile
+    handler.wfile = req.wfile
+    handler.client_address = req.client_address
+    handler.send_response = req.send_response
+    handler.send_header = req.send_header
+    handler.end_headers = req.end_headers
+
+    handler.do_POST()
+
+    assert req.response_code == 422
+    res = req.get_response_json()
+    assert res["code"] == "INVALID_EMAIL_INPUT"
+
+
+def test_predict_endpoint_inference_spy_never_called_on_invalid_inputs():
+    """Verify using a mock spy that get_cached_pipeline and model inference are NEVER called on invalid inputs."""
+    invalid_samples = [
+        "",  # Empty
+        "   \n\t  ",  # Whitespace
+        "Hello",  # Greeting alone
+        "!!!!!!!!??????",  # Punctuation
+        "xxxxxxxxxxxxxxxxxxxxxxxxx",  # Repeated
+        "The quick brown fox jumps over the lazy dog repeatedly across the green meadow.",  # Generic prose
+        "From: alice@test.com\nTo: bob@test.com",  # From/To only
+        "From: alice@test.com\nTo: bob@test.com\nSubject: \n\nPhotosynthesis converts light into chemical energy.",  # From/To empty subject + prose
+        "From: \nTo: \nSubject: Hello\n\nPlease reply."  # Malformed headers
+    ]
+
+    from unittest.mock import patch
+
+    with patch("api.predict.get_cached_pipeline") as mock_pipeline:
+        for idx, sample in enumerate(invalid_samples):
+            payload_bytes = json.dumps({"email_text": sample}).encode("utf-8")
+            headers = {
+                "Content-Type": "application/json",
+                "Content-Length": str(len(payload_bytes)),
+                "X-Forwarded-For": f"10.0.1.{idx + 1}"
+            }
+
+            req = MockServerlessRequest(method="POST", path="/api/predict", headers=headers, body=payload_bytes, client_ip=f"10.0.1.{idx + 1}")
+            handler = PredictHandler.__new__(PredictHandler)
+            handler.headers = req.headers
+            handler.rfile = req.rfile
+            handler.wfile = req.wfile
+            handler.client_address = req.client_address
+            handler.send_response = req.send_response
+            handler.send_header = req.send_header
+            handler.end_headers = req.end_headers
+
+            handler.do_POST()
+
+            assert req.response_code in [400, 422], f"Sample {idx} did not return 4xx (got {req.response_code})"
+            res = req.get_response_json()
+            assert "decision" not in res, f"Sample {idx} returned a decision verdict"
+
+        # Crucial spy assertion: get_cached_pipeline was never invoked
+        mock_pipeline.assert_not_called()

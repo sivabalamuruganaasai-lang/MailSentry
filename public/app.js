@@ -152,6 +152,13 @@ function setupEventListeners() {
     }
   });
 
+  // Handle native picker cancellation gracefully without sticking in loading/error
+  fileInput.addEventListener('cancel', () => {
+    if (!uploadedFile) {
+      hideError();
+    }
+  });
+
   function clearFileInput() {
     uploadedFile = null;
     fileInput.value = '';
@@ -159,16 +166,77 @@ function setupEventListeners() {
     dropzone.style.display = 'block';
   }
 
-  function handleSelectedFile(file) {
+  function readFileWithTimeout(file, timeoutMs = 15000) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let timer = null;
+
+      if (timeoutMs > 0) {
+        timer = setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            reject(new Error(`Timed out after ${timeoutMs / 1000}s waiting for file data.`));
+          }
+        }, timeoutMs);
+      }
+
+      if (typeof file.arrayBuffer === 'function') {
+        file.arrayBuffer().then((buf) => {
+          if (!settled) {
+            settled = true;
+            if (timer) clearTimeout(timer);
+            resolve(buf);
+          }
+        }).catch((err) => {
+          if (!settled) {
+            settled = true;
+            if (timer) clearTimeout(timer);
+            reject(err);
+          }
+        });
+      } else {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (!settled) {
+            settled = true;
+            if (timer) clearTimeout(timer);
+            resolve(reader.result);
+          }
+        };
+        reader.onerror = () => {
+          if (!settled) {
+            settled = true;
+            if (timer) clearTimeout(timer);
+            reject(reader.error || new Error('FileReader failed to read the file.'));
+          }
+        };
+        reader.onabort = () => {
+          if (!settled) {
+            settled = true;
+            if (timer) clearTimeout(timer);
+            reject(new Error('File reading was aborted.'));
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      }
+    });
+  }
+
+  async function handleSelectedFile(file) {
     hideError();
     resetToStandby();
 
     if (!file) return;
 
+    const fileName = file.name || 'unnamed_file';
+
     // Validate file extension (.eml or .txt)
-    const ext = file.name && file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : '';
+    const ext = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
     if (ext !== 'eml' && ext !== 'txt') {
-      showError(`Unsupported File Type (.${escapeHtml(ext || 'unknown')}): Only .eml and .txt email files are accepted.`);
+      showError(
+        `Unsupported File Type (.${escapeHtml(ext || 'unknown')}): Only .eml and .txt email files are accepted for "${escapeHtml(fileName)}".`,
+        'Unsupported File Type'
+      );
       clearFileInput();
       return;
     }
@@ -176,29 +244,64 @@ function setupEventListeners() {
     // Validate size limit (2.0 MiB)
     const maxBytes = 2 * 1024 * 1024;
     if (file.size > maxBytes) {
-      showError(`File Size Limit Exceeded: ${(file.size / (1024 * 1024)).toFixed(2)} MB exceeds maximum limit of 2.0 MiB.`);
+      showError(
+        `File "${escapeHtml(fileName)}" (${(file.size / (1024 * 1024)).toFixed(2)} MB) exceeds maximum limit of 2.0 MiB.`,
+        'File Size Limit Exceeded'
+      );
       clearFileInput();
       return;
     }
 
-    // Validate non-empty file
+    // Validate non-empty file (0 bytes can occur with un-synced cloud stubs or empty files)
     if (file.size === 0) {
-      showError('Selected file is empty (0 bytes). Please choose a valid email file.');
+      showError(
+        `Selected file "${escapeHtml(fileName)}" is empty (0 bytes). Cloud-backed files must be fully downloaded or non-empty.`,
+        'Empty File'
+      );
       clearFileInput();
       return;
     }
 
-    uploadedFile = file;
-    document.getElementById('loaded-filename').textContent = file.name;
-    document.getElementById('loaded-filesize').textContent = `${(file.size / 1024).toFixed(1)} KB (Ready for Analysis)`;
+    // Show initial file card with loading state
+    document.getElementById('loaded-filename').textContent = fileName;
+    document.getElementById('loaded-filesize').textContent = 'Reading / downloading file...';
     dropzone.style.display = 'none';
     fileInfoBox.style.display = 'flex';
+
+    // Pre-read content to handle delayed cloud downloads (Google Drive) and trap NotReadableError
+    try {
+      const buffer = await readFileWithTimeout(file, 15000);
+      if (!buffer || buffer.byteLength === 0) {
+        throw new Error('File data is empty after reading.');
+      }
+      if (buffer.byteLength > maxBytes) {
+        throw new Error(`Read content exceeds maximum limit of 2.0 MiB (${(buffer.byteLength / (1024 * 1024)).toFixed(2)} MB).`);
+      }
+
+      // Convert to in-memory File to guarantee reliable multipart upload
+      uploadedFile = new File([buffer], fileName, {
+        type: file.type || (ext === 'eml' ? 'message/rfc822' : 'text/plain')
+      });
+      document.getElementById('loaded-filesize').textContent = `${(buffer.byteLength / 1024).toFixed(1)} KB (Ready for Analysis)`;
+    } catch (err) {
+      clearFileInput();
+      let msg = `Unable to read "${escapeHtml(fileName)}".`;
+      if (err.name === 'NotReadableError') {
+        msg = `Unable to read "${escapeHtml(fileName)}" from Google Drive or device storage. The cloud document may still be downloading, offline, or inaccessible. Please verify internet connection or ensure the file is downloaded locally.`;
+      } else if (err.message && err.message.includes('timeout')) {
+        msg = `Timeout reading "${escapeHtml(fileName)}". Cloud download from Google Drive took too long or is unavailable offline.`;
+      } else if (err.message) {
+        msg = `Failed to process "${escapeHtml(fileName)}": ${escapeHtml(err.message)}`;
+      }
+      showError(msg, 'File Read Error');
+    }
   }
 
   // Replace file button
   if (replaceFileBtn) {
     replaceFileBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      fileInput.value = '';
       fileInput.click();
     });
   }

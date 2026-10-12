@@ -3,15 +3,18 @@ Unit Tests for Pre-Inference Email Input Validator (src/data/email_validator.py)
 
 Verifies that the validator correctly discriminates between valid email payloads
 (structured emails or plausible email bodies) and non-email inputs (empty text,
-whitespace, greetings alone, random short text, repeated characters, generic paragraphs).
+whitespace, greetings alone, random short text, repeated characters, generic paragraphs,
+isolated From/To lines, malformed headers, embedded header text in prose).
 
 Guarantees:
 - Pure pre-inference structural and communicative validation.
 - Zero dependency on model weights, feature matrices, or decision thresholds.
 - Rejection of invalid inputs without returning HAM or SPAM classifications.
+- Zero invocation of model inference on invalid input.
 """
 
 import pytest
+from unittest.mock import MagicMock, patch
 from src.data.email_validator import validate_email_input
 from src.data.parser import parse_raw_email
 
@@ -126,7 +129,116 @@ class TestEmailInputValidator:
         assert res["is_valid"] is False
         assert res["error_code"] == "INVALID_EMAIL_INPUT"
 
-    # 5. Plausible Short Emails (Accepted)
+    # 5. Issue B Specific: From and To Combinations and Subject Handling
+    def test_from_and_to_only_with_no_body_rejected(self):
+        """From and To lines with no body must be rejected."""
+        text = "From: alice@example.com\nTo: bob@example.com"
+        res = validate_email_input(text)
+        assert res["is_valid"] is False
+        assert res["error_code"] == "INSUFFICIENT_CONTENT"
+
+    def test_from_and_to_with_empty_subject_and_no_body_rejected(self):
+        """From and To with an empty subject header and no body must be rejected."""
+        text = "From: alice@example.com\nTo: bob@example.com\nSubject: "
+        res = validate_email_input(text)
+        assert res["is_valid"] is False
+        assert res["error_code"] == "INSUFFICIENT_CONTENT"
+
+    def test_from_and_to_with_empty_subject_and_insufficient_body_rejected(self):
+        """From and To with an empty subject and 1-word body must be rejected."""
+        text = "From: alice@example.com\nTo: bob@example.com\nSubject: \n\nThanks"
+        res = validate_email_input(text)
+        assert res["is_valid"] is False
+        assert res["error_code"] == "INSUFFICIENT_CONTENT"
+
+    def test_from_and_to_with_empty_subject_and_unrelated_prose_rejected(self):
+        """From and To with empty subject and generic prose body must NOT pass as an email."""
+        text = (
+            "From: alice@example.com\n"
+            "To: bob@example.com\n"
+            "Subject: \n\n"
+            "Photosynthesis is a process used by plants and other organisms to convert light "
+            "energy into chemical energy that, through cellular respiration, can later be released "
+            "to fuel the organism metabolic activities."
+        )
+        res = validate_email_input(text)
+        assert res["is_valid"] is False
+        assert res["error_code"] == "INVALID_EMAIL_INPUT"
+        assert "no subject" in res["message"].lower()
+
+    def test_from_and_to_with_empty_subject_but_meaningful_body_accepted(self):
+        """From and To with an empty subject but a meaningful email body must be accepted."""
+        text = (
+            "From: alice@example.com\n"
+            "To: bob@example.com\n"
+            "Subject: \n\n"
+            "Are you free for lunch tomorrow at noon? Let me know."
+        )
+        res = validate_email_input(text)
+        assert res["is_valid"] is True
+        assert res["details"]["format"] == "rfc822_no_subject_valid_body"
+
+    def test_missing_subject_with_legitimate_email_accepted(self):
+        """Email missing a Subject header entirely, but having legitimate email headers and body must be accepted."""
+        text = (
+            "From: director@company.com\n"
+            "To: team@company.com\n\n"
+            "Hi team, please find attached the quarterly roadmap slides. Let me know if you have questions. Thanks!"
+        )
+        res = validate_email_input(text)
+        assert res["is_valid"] is True
+        assert res["details"]["format"] == "rfc822_no_subject_valid_body"
+
+    def test_eom_subject_only_accepted(self):
+        """End-of-Message email with meaningful subject and empty body must be accepted."""
+        text = (
+            "From: colleague@company.com\n"
+            "To: team@company.com\n"
+            "Subject: Meeting moved to conference room B (EOM)"
+        )
+        res = validate_email_input(text)
+        assert res["is_valid"] is True
+        assert res["details"]["format"] == "rfc822_eom_subject_only"
+
+    def test_single_word_subject_empty_body_rejected(self):
+        """Subject with a single word and no body must be rejected."""
+        text = "From: alice@example.com\nTo: bob@example.com\nSubject: Hi"
+        res = validate_email_input(text)
+        assert res["is_valid"] is False
+        assert res["error_code"] == "INSUFFICIENT_CONTENT"
+
+    # 6. Issue B: Header-like Text Embedded in Prose vs. Malformed Headers
+    def test_random_paragraph_with_words_from_and_to_rejected(self):
+        """A random paragraph that merely contains the words 'from' and 'to' must be rejected."""
+        text = (
+            "The train journey from Paris to Berlin takes around eight hours by rail. "
+            "Passengers can enjoy scenic views across the countryside during the morning commute."
+        )
+        res = validate_email_input(text)
+        assert res["is_valid"] is False
+        assert res["error_code"] == "INVALID_EMAIL_INPUT"
+
+    def test_header_like_text_embedded_inside_prose_rejected(self):
+        """Header-like lines embedded inside ordinary paragraphs must NOT make the input an email."""
+        text = (
+            "In this experiment, we tracked particle migration across the membrane barrier.\n"
+            "From: Chamber A\n"
+            "To: Chamber B\n"
+            "The diffusion rate was measured at constant temperature over forty-eight hours."
+        )
+        res = validate_email_input(text)
+        assert res["is_valid"] is False
+        assert res["error_code"] == "INVALID_EMAIL_INPUT"
+
+    def test_malformed_headers_and_empty_required_values_rejected(self):
+        """Headers with empty required values (From: or To: without content) must be rejected."""
+        text = "From: \nTo: \nSubject: Meeting\n\nPlease attend."
+        res = validate_email_input(text)
+        assert res["is_valid"] is False
+        assert res["error_code"] == "INVALID_EMAIL_INPUT"
+        assert "malformed" in res["message"].lower() or "empty" in res["message"].lower()
+
+    # 7. Valid Plausible Short Emails (Accepted)
     def test_plausible_short_emails_accepted(self):
         short_emails = [
             "Sounds good, see you tomorrow at the office.",
@@ -141,7 +253,7 @@ class TestEmailInputValidator:
             res = validate_email_input(email)
             assert res["is_valid"] is True, f"Expected short email '{email}' to be accepted, got: {res}"
 
-    # 6. Structured RFC 822 Emails (Accepted)
+    # 8. Standard Structured RFC 822 Emails (Accepted)
     def test_structured_rfc822_email_with_headers_accepted(self):
         rfc_email = (
             "From: alex@corp.com\n"
@@ -154,18 +266,7 @@ class TestEmailInputValidator:
         assert res["is_valid"] is True
         assert res["details"]["format"] == "rfc822_structured"
 
-    def test_partial_headers_email_accepted(self):
-        # Email with only Subject
-        subject_only = "Subject: Quick question about tomorrow\n\nAre you available around 2pm?"
-        res1 = validate_email_input(subject_only)
-        assert res1["is_valid"] is True
-
-        # Email with only From
-        from_only = "From: hr@company.com\n\nPlease submit your timesheet before Friday."
-        res2 = validate_email_input(from_only)
-        assert res2["is_valid"] is True
-
-    # 7. Phishing / Security Alert Email (Accepted for Analysis, Verdict NOT Hard-Coded)
+    # 9. Phishing / Security Alert Email (Accepted for Analysis, Verdict NOT Hard-Coded)
     def test_phishing_alert_email_accepted_for_analysis(self):
         phish_text = (
             "Urgent: Your account access has been suspended due to unauthorized activity. "
@@ -179,7 +280,7 @@ class TestEmailInputValidator:
         assert "label" not in res
         assert "routing_tier" not in res
 
-    # 8. HTML Rich Emails (Accepted)
+    # 10. HTML Rich Emails (Accepted)
     def test_html_email_accepted(self):
         html_email = (
             "<html><body>"
@@ -192,7 +293,7 @@ class TestEmailInputValidator:
         assert res["is_valid"] is True
         assert "html_markup" in res["details"].get("signals", [])
 
-    # 9. Integration with parse_raw_email
+    # 11. Integration with parse_raw_email
     def test_integration_with_parsed_email(self):
         raw_bytes = (
             b"From: billing@cloud.com\r\n"

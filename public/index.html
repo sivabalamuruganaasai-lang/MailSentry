@@ -73,11 +73,11 @@
 
         <!-- Mode B: File Upload -->
         <div id="upload-container" class="form-group" style="display: none;">
+          <input type="file" id="file-input" name="email_file" accept=".eml,.txt,message/rfc822,text/plain,application/octet-stream" class="visually-hidden">
           <label id="dropzone" for="file-input" class="dropzone" tabindex="0" role="button" aria-label="Upload email file">
-            <input type="file" id="file-input" name="email_file" accept=".eml,.txt,message/rfc822,text/plain" class="visually-hidden">
             <div class="dropzone-icon">📁</div>
             <div class="dropzone-title">Choose an email file (.eml, .txt) or drag &amp; drop</div>
-            <div class="dropzone-sub">Click or tap to browse your local device (Max 2.0 MiB)</div>
+            <div class="dropzone-sub">Browse local device or Google Drive (Max 2.0 MiB)</div>
           </label>
 
           <div id="file-info-box" class="file-box" style="display: none;">
