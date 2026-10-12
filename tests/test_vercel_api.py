@@ -444,6 +444,20 @@ def test_vercel_json_configuration_schema():
     assert "Referrer-Policy" in header_keys
 
 
+def test_vercelignore_does_not_exclude_src_packages():
+    """Verify .vercelignore anchors root directories and does not exclude src/data/parser.py."""
+    vi_path = PROJECT_ROOT / ".vercelignore"
+    assert vi_path.exists(), ".vercelignore must exist in project root"
+
+    with open(vi_path, "r", encoding="utf-8") as f:
+        raw_lines = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+
+    # Critical check: ensure 'data/' is not unanchored (which would match any '**/data/' including 'src/data/')
+    assert "data/" not in raw_lines, "Unanchored 'data/' in .vercelignore unintentionally excludes 'src/data/'"
+    assert any(line in ["/data/", "/data"] for line in raw_lines), ".vercelignore must anchor root /data/ directory"
+    assert any(line in ["/reports/", "/reports"] for line in raw_lines), ".vercelignore must anchor root /reports/ directory"
+
+
 def test_predict_endpoint_missing_content_length_oversized():
     """Verify oversized request (> 2.0 MiB) is rejected with HTTP 413 when Content-Length header is omitted."""
     oversized_body = b"Subject: NoHeaderBig\n\n" + b"A" * (MAX_INPUT_BYTES + 2048)

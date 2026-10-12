@@ -51,8 +51,8 @@ The deployment configuration is maintained in `vercel.json`:
 
 ### Deployment Filtering (`.vercelignore`)
 A `.vercelignore` file at the repository root prevents Vercel from mistaking local development tools for deployment services:
-- **Excludes `src/ui/app.py` & `.streamlit/`**: Ensures Vercel does not detect Streamlit as a separate service (preventing the multi-service `vercel.json` prompt).
-- **Excludes `requirements-dev.txt`, `tests/`, `reports/`, and `data/`**: Prevents development assets from bloating the repository analysis and deployment artifact.
+- **Excludes `src/ui/app.py` & `/.streamlit/`**: Ensures Vercel does not detect Streamlit as a separate service (preventing the multi-service `vercel.json` prompt).
+- **Excludes `/requirements-dev.txt`, `/tests/`, `/reports/`, and `/data/`**: Prevents development assets and datasets from bloating the deployment artifact, while leading slashes guarantee internal package modules like `src/data/` remain included in the serverless bundle.
 
 ---
 
