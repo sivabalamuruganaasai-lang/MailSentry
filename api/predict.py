@@ -20,6 +20,7 @@ from collections import defaultdict
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
+from typing import Optional
 
 # Ensure project root is on sys.path for headless imports
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -39,8 +40,10 @@ from src.models.inference import (
     build_feature_record
 )
 from src.data.parser import parse_raw_email
+from src.data.email_validator import validate_email_input
 from src.features.url_security import analyze_email_urls
 from src.models.explainability import explain_individual_prediction
+
 
 # Pinned Demo Email Fixtures for /api/predict GET endpoint
 DEMO_PRESETS = {
@@ -175,6 +178,31 @@ def extract_payload_bytes(content_type: str, body_bytes: bytes) -> bytes:
     return body_bytes
 
 
+def extract_uploaded_filename(content_type: str, body_bytes: bytes) -> Optional[str]:
+    """Extract uploaded filename from multipart/form-data payload if present."""
+    if not body_bytes or not content_type:
+        return None
+    c_type_lower = content_type.lower()
+    if "multipart/form-data" in c_type_lower and "boundary=" in c_type_lower:
+        try:
+            idx = c_type_lower.find("boundary=")
+            boundary_part = content_type[idx + len("boundary="):].strip().split(";")[0].strip(' \t\r\n\'"')
+            boundary = boundary_part.encode()
+            delimiter = b"--" + boundary
+
+            parts = body_bytes.split(delimiter)
+            for part in parts:
+                if b'filename="' in part:
+                    fn_start = part.find(b'filename="') + len(b'filename="')
+                    fn_end = part.find(b'"', fn_start)
+                    if fn_end != -1:
+                        return part[fn_start:fn_end].decode("utf-8", errors="replace").strip()
+        except Exception:
+            return None
+    return None
+
+
+
 class handler(BaseHTTPRequestHandler):
     """Vercel Serverless Function HTTP request handler for /api/predict."""
 
@@ -269,15 +297,27 @@ class handler(BaseHTTPRequestHandler):
             })
             return
 
-        # Step 4: Extract payload bytes
+        # Step 4: Extract payload bytes and metadata
         content_type = self.headers.get("Content-Type", "")
+        uploaded_filename = extract_uploaded_filename(content_type, body_bytes)
+        if uploaded_filename:
+            file_ext = uploaded_filename.lower().rsplit(".", 1)[-1] if "." in uploaded_filename else ""
+            if file_ext and file_ext not in ["eml", "txt"]:
+                self._send_json(422, {
+                    "error": f"Unsupported file extension (.{file_ext}). Only .eml and .txt files are accepted for email analysis.",
+                    "code": "UNSUPPORTED_FILE_TYPE",
+                    "message": f"Unsupported file extension (.{file_ext}). Please upload a valid .eml or .txt file."
+                })
+                return
+
         active_payload = extract_payload_bytes(content_type, body_bytes)
 
         # Step 5: Validate empty / whitespace payload
         if not active_payload or not active_payload.strip():
             self._send_json(400, {
                 "error": "Email payload is empty or contains only whitespace.",
-                "code": "EMPTY_INPUT"
+                "code": "EMPTY_INPUT",
+                "message": "Email payload is empty or contains only whitespace."
             })
             return
 
@@ -288,19 +328,34 @@ class handler(BaseHTTPRequestHandler):
                 err_msg = parsed_email.get("parse_error", "Structure could not be parsed.") if isinstance(parsed_email, dict) else "Parser failure."
                 self._send_json(422, {
                     "error": f"Email structure could not be parsed: {err_msg}",
-                    "code": "PARSE_FAILURE"
+                    "code": "PARSE_FAILURE",
+                    "message": "Email structure could not be parsed."
                 })
                 return
         except Exception:
             self._send_json(422, {
                 "error": "Email parser encountered an unrecoverable format error.",
-                "code": "PARSE_EXCEPTION"
+                "code": "PARSE_EXCEPTION",
+                "message": "Email parser encountered an unrecoverable format error."
             })
             return
 
-        # Step 7: Load verified model pipeline
+        # Step 7: Pre-Inference Email Input Validation
+        # Validates email plausibility and rejects non-email / random text before model execution
+        validation = validate_email_input(active_payload, parsed_email)
+        if not validation["is_valid"]:
+            self._send_json(422, {
+                "error": validation["message"],
+                "code": validation["error_code"],
+                "message": validation["message"],
+                "details": validation.get("details", {})
+            })
+            return
+
+        # Step 8: Load verified model pipeline (only reached for valid email input)
         try:
             pipeline = get_cached_pipeline()
+
         except Exception:
             self._send_json(500, {
                 "error": "Model deployment bundle failed cryptographic verification or loading.",

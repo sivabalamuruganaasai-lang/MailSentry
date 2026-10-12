@@ -69,6 +69,8 @@ function setupEventListeners() {
   const runBtn = document.getElementById('run-btn');
   const resetBtn = document.getElementById('reset-btn');
 
+  const replaceFileBtn = document.getElementById('replace-file-btn');
+
   // Textarea telemetry
   emailTextarea.addEventListener('input', () => {
     const text = emailTextarea.value;
@@ -117,9 +119,15 @@ function setupEventListeners() {
     }
   }
 
-  // Dropzone events
-  dropzone.addEventListener('click', () => fileInput.click());
+  // Keyboard accessibility for label dropzone
+  dropzone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      fileInput.click();
+    }
+  });
 
+  // Drag & drop events on dropzone
   dropzone.addEventListener('dragover', (e) => {
     e.preventDefault();
     dropzone.classList.add('dragover');
@@ -132,37 +140,51 @@ function setupEventListeners() {
   dropzone.addEventListener('drop', (e) => {
     e.preventDefault();
     dropzone.classList.remove('dragover');
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       handleSelectedFile(e.dataTransfer.files[0]);
     }
   });
 
+  // File input change handler (native picker on desktop & mobile)
   fileInput.addEventListener('change', (e) => {
     if (e.target.files && e.target.files.length > 0) {
       handleSelectedFile(e.target.files[0]);
     }
   });
 
+  function clearFileInput() {
+    uploadedFile = null;
+    fileInput.value = '';
+    fileInfoBox.style.display = 'none';
+    dropzone.style.display = 'block';
+  }
+
   function handleSelectedFile(file) {
     hideError();
     resetToStandby();
 
-    const maxBytes = 2 * 1024 * 1024;
-    if (file.size > maxBytes) {
-      showError(`File Size Limit Exceeded: File size is ${(file.size / (1024 * 1024)).toFixed(2)} MB. Maximum allowed limit is 2.0 MB.`);
-      uploadedFile = null;
-      fileInput.value = '';
-      fileInfoBox.style.display = 'none';
-      dropzone.style.display = 'block';
+    if (!file) return;
+
+    // Validate file extension (.eml or .txt)
+    const ext = file.name && file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : '';
+    if (ext !== 'eml' && ext !== 'txt') {
+      showError(`Unsupported File Type (.${escapeHtml(ext || 'unknown')}): Only .eml and .txt email files are accepted.`);
+      clearFileInput();
       return;
     }
 
+    // Validate size limit (2.0 MiB)
+    const maxBytes = 2 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      showError(`File Size Limit Exceeded: ${(file.size / (1024 * 1024)).toFixed(2)} MB exceeds maximum limit of 2.0 MiB.`);
+      clearFileInput();
+      return;
+    }
+
+    // Validate non-empty file
     if (file.size === 0) {
-      showError('Uploaded file is empty (0 bytes). Please upload a valid email file.');
-      uploadedFile = null;
-      fileInput.value = '';
-      fileInfoBox.style.display = 'none';
-      dropzone.style.display = 'block';
+      showError('Selected file is empty (0 bytes). Please choose a valid email file.');
+      clearFileInput();
       return;
     }
 
@@ -173,11 +195,18 @@ function setupEventListeners() {
     fileInfoBox.style.display = 'flex';
   }
 
-  removeFileBtn.addEventListener('click', () => {
-    uploadedFile = null;
-    fileInput.value = '';
-    fileInfoBox.style.display = 'none';
-    dropzone.style.display = 'block';
+  // Replace file button
+  if (replaceFileBtn) {
+    replaceFileBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fileInput.click();
+    });
+  }
+
+  // Remove file button
+  removeFileBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    clearFileInput();
     hideError();
     resetToStandby();
   });
@@ -187,14 +216,12 @@ function setupEventListeners() {
     presetSelect.value = '';
     emailTextarea.value = '';
     textCharsCount.textContent = '0 characters • 0 lines';
-    uploadedFile = null;
-    fileInput.value = '';
-    fileInfoBox.style.display = 'none';
-    dropzone.style.display = 'block';
+    clearFileInput();
     hideError();
     switchToMode('paste');
     resetToStandby();
   });
+
 
   // Run Threat Analysis button
   runBtn.addEventListener('click', executeAnalysis);
@@ -223,15 +250,16 @@ function setupTabs() {
   });
 }
 
-function showError(msg) {
+function showError(msg, title = 'Error') {
   const errBox = document.getElementById('input-error-box');
-  errBox.textContent = `❌ ${msg}`;
+  errBox.innerHTML = `<strong>⚠️ ${escapeHtml(title)}:</strong> ${escapeHtml(msg)}`;
   errBox.style.display = 'block';
 }
 
 function hideError() {
   const errBox = document.getElementById('input-error-box');
   errBox.style.display = 'none';
+  errBox.innerHTML = '';
 }
 
 function resetToStandby() {
@@ -249,16 +277,40 @@ async function executeAnalysis() {
   if (currentMode === 'paste') {
     const textVal = document.getElementById('email-textarea').value.trim();
     if (!textVal) {
-      showError('Please paste email content or select a preset before running analysis.');
+      showError('Please paste email content or select a preset before running analysis.', 'Input Required');
+      document.getElementById('eval-header-status').textContent = 'INVALID INPUT';
       return;
     }
     bodyData = JSON.stringify({ email_text: textVal });
     headers['Content-Type'] = 'application/json';
   } else {
     if (!uploadedFile) {
-      showError('Please select or drop a .eml or .txt file before running analysis.');
+      showError('Please select or drop a .eml or .txt file before running analysis.', 'File Required');
+      document.getElementById('eval-header-status').textContent = 'INVALID INPUT';
       return;
     }
+
+    // Pre-flight validation on selected file
+    const ext = uploadedFile.name && uploadedFile.name.includes('.') ? uploadedFile.name.split('.').pop().toLowerCase() : '';
+    if (ext !== 'eml' && ext !== 'txt') {
+      showError(`Only .eml and .txt email files are accepted (got .${ext || 'unknown'}).`, 'Unsupported File Type');
+      document.getElementById('eval-header-status').textContent = 'INVALID INPUT';
+      return;
+    }
+
+    const maxBytes = 2 * 1024 * 1024;
+    if (uploadedFile.size > maxBytes) {
+      showError(`${(uploadedFile.size / (1024 * 1024)).toFixed(2)} MB exceeds maximum limit of 2.0 MiB.`, 'File Size Limit Exceeded');
+      document.getElementById('eval-header-status').textContent = 'INVALID INPUT';
+      return;
+    }
+
+    if (uploadedFile.size === 0) {
+      showError('The selected file is empty (0 bytes). Please choose a valid email file.', 'Empty File');
+      document.getElementById('eval-header-status').textContent = 'INVALID INPUT';
+      return;
+    }
+
     const formData = new FormData();
     formData.append('email_file', uploadedFile);
     bodyData = formData;
@@ -272,6 +324,7 @@ async function executeAnalysis() {
   runBtn.disabled = true;
   spinner.style.display = 'inline';
   btnText.textContent = 'Evaluating Neural Core...';
+  document.getElementById('eval-header-status').textContent = 'ANALYZING...';
 
   try {
     const response = await fetch('/api/predict', {
@@ -280,18 +333,50 @@ async function executeAnalysis() {
       body: bodyData
     });
 
-    const resJson = await response.json();
+    const contentType = response.headers.get('content-type') || '';
+    let resJson = null;
+
+    if (contentType.includes('application/json')) {
+      try {
+        resJson = await response.json();
+      } catch (parseErr) {
+        resJson = null;
+      }
+    }
 
     if (!response.ok) {
-      showError(resJson.error || `Threat analysis failed (HTTP ${response.status}).`);
       resetToStandby();
+      if (response.status === 400 || response.status === 422) {
+        document.getElementById('eval-header-status').textContent = 'INVALID INPUT';
+        const title = (resJson && resJson.code === 'INSUFFICIENT_CONTENT') ? 'Insufficient email content' : 'Invalid input';
+        const message = (resJson && (resJson.message || resJson.error)) || 'Please enter a plausible email or email body with enough content to analyze.';
+        showError(message, title);
+      } else if (response.status === 413) {
+        document.getElementById('eval-header-status').textContent = 'PAYLOAD TOO LARGE';
+        showError('Submitted payload exceeds the maximum allowed limit of 2.0 MiB.', 'Payload Too Large');
+      } else if (response.status === 429) {
+        document.getElementById('eval-header-status').textContent = 'RATE LIMITED';
+        showError('Too many requests submitted. Please wait a moment before trying again.', 'Rate Limit Exceeded');
+      } else {
+        document.getElementById('eval-header-status').textContent = 'SERVER ERROR';
+        const serverMsg = (resJson && (resJson.error || resJson.message)) || `Server error (HTTP ${response.status}).`;
+        showError(serverMsg, 'Server Error');
+      }
+      return;
+    }
+
+    if (!resJson) {
+      resetToStandby();
+      document.getElementById('eval-header-status').textContent = 'RESPONSE ERROR';
+      showError('Server returned an unexpected non-JSON response.', 'Response Error');
       return;
     }
 
     renderAnalysisResults(resJson);
   } catch (err) {
-    showError(`Network connection error: Could not reach analysis engine (${err.message}).`);
     resetToStandby();
+    document.getElementById('eval-header-status').textContent = 'CONNECTION ERROR';
+    showError(`Could not reach analysis engine (${err.message}). Check your network connection.`, 'Network Error');
   } finally {
     runBtn.disabled = false;
     spinner.style.display = 'none';

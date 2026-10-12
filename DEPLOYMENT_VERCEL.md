@@ -109,7 +109,8 @@ Accepts email text via JSON (`{"email_text": "..."}`), raw payload, or multipart
 
 **Enforcements**:
 - **Size Limit**: Enforces a strict server-side **2.0 MiB** (`2,097,152 bytes`) limit before parsing. Payloads exceeding this return `413 Payload Too Large`.
-- **Empty / Malformed**: Empty or whitespace payloads return `400 Bad Request`. Corrupt MIME structures return `422 Unprocessable Entity`.
+- **File Type Validation**: Only `.eml` and `.txt` files are accepted. Unsupported extensions (e.g., `.pdf`, `.exe`) return `422 Unprocessable Entity` with `UNSUPPORTED_FILE_TYPE`.
+- **Pre-Inference Email Validation**: All inputs undergo structural and communicative plausibility checks (`src/data/email_validator.py`) before model invocation. Empty inputs return `400 Bad Request`. Arbitrary non-email text, greetings alone, repeated characters, and generic paragraphs return `422 Unprocessable Entity` (`INVALID_EMAIL_INPUT` / `INSUFFICIENT_CONTENT`) without invoking the model or assigning bogus classifications.
 - **In-Memory Only**: Payloads are never saved to `/tmp` or persistent storage.
 - **Privacy & Logging**: Email bodies, subject lines, header values, and URLs are never logged to console or logs.
 - **Safe Heuristics**: URL safety indicators are purely heuristic and offline; the engine explicitly states that clean heuristic checks do not guarantee an external link is safe.
@@ -135,18 +136,21 @@ Accepts email text via JSON (`{"email_text": "..."}`), raw payload, or multipart
 
 To verify the Vercel serverless API handlers locally using the automated suite:
 ```bash
-python -m pytest tests/test_vercel_api.py -v
+python -m pytest tests/test_vercel_api.py tests/test_email_validator.py -v
 ```
 
-All 11 tests validate:
-1. Cryptographic health checks
+The test suites validate:
+1. Cryptographic health checks & SHA-256 integrity
 2. Presets and API documentation reflection
 3. High-confidence HAM inference and AUTO HAM routing
 4. Boundary HAM inference and REVIEW QUEUE corridor routing
 5. High-confidence SPAM inference and AUTO SPAM routing
 6. Multipart `.eml` and `.txt` file uploads
-7. Empty and whitespace-only input rejection
-8. 2 MiB boundary enforcement (HTTP 413)
-9. Rate limiting triggers (HTTP 429)
-10. Classifier HAM with independent flagged URL indicator alerts
-11. Traceback/stack leak suppression on malformed payloads
+7. Unsupported file extension rejection (`.pdf`, `.exe` -> HTTP 422)
+8. Empty and whitespace-only input rejection (HTTP 400)
+9. Pre-inference validation rejecting generic paragraphs, `hello world`, and punctuation (HTTP 422)
+10. Preservation of frozen model scores and routing on valid inputs
+11. 2 MiB boundary enforcement (HTTP 413)
+12. Rate limiting triggers (HTTP 429)
+13. Classifier HAM with independent flagged URL indicator alerts
+14. Traceback/stack leak suppression on malformed payloads

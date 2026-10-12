@@ -73,18 +73,25 @@
 
         <!-- Mode B: File Upload -->
         <div id="upload-container" class="form-group" style="display: none;">
-          <div id="dropzone" class="dropzone">
-            <input type="file" id="file-input" accept=".eml,.txt,message/rfc822,text/plain" style="display: none;">
-            <div class="dropzone-title">📁 Drag & drop email file (.eml, .txt)</div>
-            <div class="dropzone-sub">or click to browse your local filesystem (Max 2.0 MiB)</div>
-          </div>
+          <label id="dropzone" for="file-input" class="dropzone" tabindex="0" role="button" aria-label="Upload email file">
+            <input type="file" id="file-input" name="email_file" accept=".eml,.txt,message/rfc822,text/plain" class="visually-hidden">
+            <div class="dropzone-icon">📁</div>
+            <div class="dropzone-title">Choose an email file (.eml, .txt) or drag &amp; drop</div>
+            <div class="dropzone-sub">Click or tap to browse your local device (Max 2.0 MiB)</div>
+          </label>
 
           <div id="file-info-box" class="file-box" style="display: none;">
-            <div>
-              <div id="loaded-filename" style="font-weight: 700; font-size: 0.8rem; color: #FFFFFF;">filename.eml</div>
-              <div id="loaded-filesize" style="font-size: 0.7rem; color: var(--text-dim); font-family: var(--font-mono);">0 KB</div>
+            <div style="display: flex; align-items: center; gap: 0.6rem; min-width: 0;">
+              <span style="font-size: 1.25rem;">📄</span>
+              <div style="min-width: 0;">
+                <div id="loaded-filename" style="font-weight: 700; font-size: 0.8rem; color: #FFFFFF; word-break: break-all;">filename.eml</div>
+                <div id="loaded-filesize" style="font-size: 0.7rem; color: var(--text-dim); font-family: var(--font-mono);">0 KB</div>
+              </div>
             </div>
-            <button id="remove-file-btn" class="pill pill-dim" style="cursor: pointer;" type="button">Remove File</button>
+            <div style="display: flex; gap: 0.4rem; align-items: center; flex-shrink: 0;">
+              <button id="replace-file-btn" class="pill pill-safe" style="cursor: pointer;" type="button">Replace File</button>
+              <button id="remove-file-btn" class="pill pill-dim" style="cursor: pointer;" type="button">Remove</button>
+            </div>
           </div>
         </div>
 

@@ -265,8 +265,22 @@ body {
   border: 1px solid rgba(0, 229, 255, 0.3);
 }
 
+/* Visually Hidden Utility for Accessible Inputs */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Drop Zone */
 .dropzone {
+  display: block;
   border: 2px dashed var(--border-dim);
   border-radius: 4px;
   padding: 2rem 1.5rem;
@@ -274,11 +288,18 @@ body {
   background: #020C18;
   cursor: pointer;
   transition: all 0.2s;
+  user-select: none;
 }
 
-.dropzone:hover, .dropzone.dragover {
+.dropzone:hover, .dropzone.dragover, .dropzone:focus-visible {
   border-color: var(--cyan-accent);
   background: rgba(0, 229, 255, 0.04);
+  outline: none;
+}
+
+.dropzone-icon {
+  font-size: 1.8rem;
+  margin-bottom: 0.35rem;
 }
 
 .dropzone-title {

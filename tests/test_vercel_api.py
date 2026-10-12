@@ -553,7 +553,7 @@ def test_predict_endpoint_multipart_with_quoted_mixed_case_boundary():
 
 
 def test_predict_endpoint_binary_unsupported_file_graceful():
-    """Verify uploading a binary executable file executes safely without server crashes."""
+    """Verify uploading a binary executable file is gracefully rejected with HTTP 422 without model execution."""
     # Fake Windows PE executable header
     fake_exe_bytes = b"MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff\x00\x00\xb8\x00\x00\x00"
     headers = {
@@ -574,11 +574,186 @@ def test_predict_endpoint_binary_unsupported_file_graceful():
 
     handler.do_POST()
 
+    assert req.response_code == 422
+    res = req.get_response_json()
+    assert res["code"] == "INVALID_EMAIL_INPUT"
+    assert "decision" not in res
+
+
+def test_predict_endpoint_invalid_generic_paragraph_rejected():
+    """Verify arbitrary generic prose (e.g. encyclopedia paragraph) returns HTTP 422 without invoking model."""
+    generic_text = (
+        "Photosynthesis is a process used by plants and other organisms to convert light "
+        "energy into chemical energy that, through cellular respiration, can later be released "
+        "to fuel the organism's metabolic activities. This chemical energy is stored in "
+        "carbohydrate molecules, such as sugars, which are synthesized from carbon dioxide and water."
+    )
+    payload_bytes = json.dumps({"email_text": generic_text}).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "Content-Length": str(len(payload_bytes)),
+        "X-Forwarded-For": "10.0.0.20"
+    }
+
+    req = MockServerlessRequest(method="POST", path="/api/predict", headers=headers, body=payload_bytes, client_ip="10.0.0.20")
+    handler = PredictHandler.__new__(PredictHandler)
+    handler.headers = req.headers
+    handler.rfile = req.rfile
+    handler.wfile = req.wfile
+    handler.client_address = req.client_address
+    handler.send_response = req.send_response
+    handler.send_header = req.send_header
+    handler.end_headers = req.end_headers
+
+    handler.do_POST()
+
+    assert req.response_code == 422
+    res = req.get_response_json()
+    assert res["code"] == "INVALID_EMAIL_INPUT"
+    assert "decision" not in res
+    assert "is_spam" not in res
+
+
+def test_predict_endpoint_random_text_hello_world_rejected():
+    """Verify greeting-only / random text like 'hello world' returns HTTP 422."""
+    payload_bytes = json.dumps({"email_text": "hello world"}).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "Content-Length": str(len(payload_bytes)),
+        "X-Forwarded-For": "10.0.0.21"
+    }
+
+    req = MockServerlessRequest(method="POST", path="/api/predict", headers=headers, body=payload_bytes, client_ip="10.0.0.21")
+    handler = PredictHandler.__new__(PredictHandler)
+    handler.headers = req.headers
+    handler.rfile = req.rfile
+    handler.wfile = req.wfile
+    handler.client_address = req.client_address
+    handler.send_response = req.send_response
+    handler.send_header = req.send_header
+    handler.end_headers = req.end_headers
+
+    handler.do_POST()
+
+    assert req.response_code == 422
+    res = req.get_response_json()
+    assert res["code"] == "INSUFFICIENT_CONTENT"
+    assert "decision" not in res
+
+
+def test_predict_endpoint_multipart_unsupported_extension_rejected():
+    """Verify uploading an unsupported file format (.pdf) returns HTTP 422 UNSUPPORTED_FILE_TYPE."""
+    boundary = "----WebKitFormBoundaryPdfUpload123"
+    pdf_content = b"%PDF-1.4 header fake content"
+    multipart_body = (
+        f"--{boundary}\r\n".encode() +
+        b'Content-Disposition: form-data; name="email_file"; filename="invoice.pdf"\r\n' +
+        b"Content-Type: application/pdf\r\n\r\n" +
+        pdf_content +
+        f"\r\n--{boundary}--\r\n".encode()
+    )
+
+    headers = {
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+        "Content-Length": str(len(multipart_body)),
+        "X-Forwarded-For": "10.0.0.22"
+    }
+
+    req = MockServerlessRequest(method="POST", path="/api/predict", headers=headers, body=multipart_body, client_ip="10.0.0.22")
+    handler = PredictHandler.__new__(PredictHandler)
+    handler.headers = req.headers
+    handler.rfile = req.rfile
+    handler.wfile = req.wfile
+    handler.client_address = req.client_address
+    handler.send_response = req.send_response
+    handler.send_header = req.send_header
+    handler.end_headers = req.end_headers
+
+    handler.do_POST()
+
+    assert req.response_code == 422
+    res = req.get_response_json()
+    assert res["code"] == "UNSUPPORTED_FILE_TYPE"
+    assert ".pdf" in res["error"]
+    assert "decision" not in res
+
+
+def test_predict_endpoint_multipart_txt_file_accepted():
+    """Verify uploading a valid .txt email file is processed and classified by the model."""
+    boundary = "----WebKitFormBoundaryTxtUpload456"
+    txt_content = (
+        b"From: billing@cloudprovider.com\r\n"
+        b"To: client@domain.com\r\n"
+        b"Subject: Monthly Cloud Invoice #4092\r\n\r\n"
+        b"Please review your monthly cloud services invoice attached.\r\n"
+        b"Best regards,\r\nBilling Team"
+    )
+    multipart_body = (
+        f"--{boundary}\r\n".encode() +
+        b'Content-Disposition: form-data; name="email_file"; filename="invoice_notice.txt"\r\n' +
+        b"Content-Type: text/plain\r\n\r\n" +
+        txt_content +
+        f"\r\n--{boundary}--\r\n".encode()
+    )
+
+    headers = {
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+        "Content-Length": str(len(multipart_body)),
+        "X-Forwarded-For": "10.0.0.23"
+    }
+
+    req = MockServerlessRequest(method="POST", path="/api/predict", headers=headers, body=multipart_body, client_ip="10.0.0.23")
+    handler = PredictHandler.__new__(PredictHandler)
+    handler.headers = req.headers
+    handler.rfile = req.rfile
+    handler.wfile = req.wfile
+    handler.client_address = req.client_address
+    handler.send_response = req.send_response
+    handler.send_header = req.send_header
+    handler.end_headers = req.end_headers
+
+    handler.do_POST()
+
     assert req.response_code == 200
     res = req.get_response_json()
     assert res["success"] is True
     assert "decision" in res
-    assert "routing_tier" in res["decision"]
+    assert res["decision"]["label"] in ["HAM", "SPAM"]
+
+
+def test_predict_endpoint_multipart_empty_file_rejected():
+    """Verify uploading an empty file via multipart returns HTTP 400 EMPTY_INPUT."""
+    boundary = "----WebKitFormBoundaryEmpty789"
+    multipart_body = (
+        f"--{boundary}\r\n".encode() +
+        b'Content-Disposition: form-data; name="email_file"; filename="empty.eml"\r\n' +
+        b"Content-Type: message/rfc822\r\n\r\n" +
+        b"" +
+        f"\r\n--{boundary}--\r\n".encode()
+    )
+
+    headers = {
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+        "Content-Length": str(len(multipart_body)),
+        "X-Forwarded-For": "10.0.0.24"
+    }
+
+    req = MockServerlessRequest(method="POST", path="/api/predict", headers=headers, body=multipart_body, client_ip="10.0.0.24")
+    handler = PredictHandler.__new__(PredictHandler)
+    handler.headers = req.headers
+    handler.rfile = req.rfile
+    handler.wfile = req.wfile
+    handler.client_address = req.client_address
+    handler.send_response = req.send_response
+    handler.send_header = req.send_header
+    handler.end_headers = req.end_headers
+
+    handler.do_POST()
+
+    assert req.response_code == 400
+    res = req.get_response_json()
+    assert res["code"] == "EMPTY_INPUT"
+    assert "decision" not in res
 
 
 def test_client_xss_injection_payload_sanitization():
